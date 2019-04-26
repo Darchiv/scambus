@@ -5,9 +5,10 @@ from wmbus import WMBusFrame
    
 def main(argv):
     
+    frameformat = ''
     filename = ''
     text = ''
-    usagetext = 'reader.py [-v]erbose -f <filename>\nreader.py [-v]erbose -t \'<CA FE BA BE...>\''
+    usagetext = 'reader.py [-v]erbose [-a,--format=a|b|''] -f <filename>\nreader.py -t \'<CA FE BA BE...>\''
     verbosity = 0 
 
     # setup known keys dictionarry by their device id
@@ -17,11 +18,17 @@ def main(argv):
     }
     
     try:
-        opts, args = getopt.getopt(argv,"vt:f:",["text=", "filename="])
+        opts, args = getopt.getopt(argv,"va:t:f:",["format=", "text=", "filename="])
     except getopt.GetoptError:
         print usagetext
         sys.exit(2)
     for opt, arg in opts:
+        if opt in ("-a", "--format"):
+            if arg != 'a' and arg != 'b' and arg != '':
+                print usagetext
+                sys.exit(2)
+
+            frameformat = arg
         if opt in ("-f", "--filename"):
             filename = arg
             text = open(filename, 'r').read()
@@ -41,7 +48,7 @@ def main(argv):
         print "hex: ", util.tohex(capture)
 
     frame = WMBusFrame()
-    frame.parse(capture, keys)
+    frame.parse(capture, frameformat, keys)
     frame.log(verbosity)
 
 

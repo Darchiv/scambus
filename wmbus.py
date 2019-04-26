@@ -10,9 +10,12 @@ debug = 1
 
 class WMBusFrame():
 
+
+
     def __init__(self, *args, **kwargs):
 
         # just holds the most usefull wireless M-Bus frame params
+        self.frameformat = ''
         self.length = None
         self.control = None
         self.manufacturer = None
@@ -24,12 +27,18 @@ class WMBusFrame():
         self.data_size = None
         self.key = None
     
-    def parse(self, arr, keys=None):
+    def parse(self, arr, frameformat, keys=None):
         """ Parses frame contents and initializes object values
         
         The first steps of setting up an WMBusFrame should be the 
         initialization of the class and passing the wM-Bus frame as an array
         to the parse method in order to initialize the object values. 
+        
+        The frame format parameter specifies the link-layer format of the passed
+        wM-Bus frame. When an empty string is passed, then the frame does not
+        contain CRC bytes (no modification). A string of 'a' or 'b' indicates an
+        A- or B-frame and the CRC bytes will be stripped before further
+        processing.
         
         Optionally, the parse method takes a keys dictionarry which lists
         known keys by their device id. E.g.
@@ -40,77 +49,85 @@ class WMBusFrame():
         }
         """
 
+        if (arr is None or not hasattr(arr, "__len__")):
+            raise Exception("Invalid input")
+
+        self.frameformat = frameformat
+
+        arr = self.strip_crc(arr)
+
         if len(arr)-1 != arr[0]:
             print "WARNING: frame length field does not match effective frame length! Decoding might be unreliable. Check your input."
-            
+            print "Make sure the frame format is correct."
+
             print "frame[0]: ", arr[0]
             print "len(frame)-1: ", len(arr)-1
         
-        if (arr is not None and arr[0] >= 11):
-            self.length = arr[0]
-            self.control = arr[1]
-            self.manufacturer = arr[2:4]
-            self.address = arr[4:10]
-            self.control_information = arr[10]
-            self.data = arr[11:]
-            
-            if (self.is_with_long_tl()):
-                self.header = WMBusLongDataHeader()
-                self.header.parse(self.data[0:12])
-                self.data = self.data[12:]
-                
-                '''
-                Note that according to the standard, the manufacturer and 
-                device id from the transport header have precedence over the
-                frame information
-                '''
-                #self.manufacturer = header.manufacturer
-                #self.address[0,4] = header.identification
-                #self.address[4] = header.version
-                #self.address[5] = header.device_type
-                
-            elif (self.is_with_short_tl()):
-                self.header = WMBusShortDataHeader()
-                self.header.parse(self.data[0:4])
-                self.data = self.data[4:]
-                
-            self.data_size = len(self.data)
-            
-            if (keys):
-                devid = ''.join(chr(b) for b in self.get_device_id()) 
-                self.key = keys.get(devid, None)
-            
-            # time might come where we should move this into a function
-            if (self.header and self.header.get_encryption_mode() == 5):
-                
-                # data is encrypted. thus, check if a key was specified
-                if (self.key):
-                    
-                    # setup cipher specs, decrypt and strip padding
-                    spec = AES.new(self.key, AES.MODE_CBC, "%s" % self.get_iv())
-                    self.data = bytearray(spec.decrypt("%s" % self.data))
-                   
-                    if debug:
-                        print "dec: ", util.tohex(self.data)
-                    
-                    # check whether the first two bytes are 2F
-                    if (self.data[0:2] != '\x2F\x2F'):
-                        print util.tohex(self.data)
-                        raise Exception("Decryption failed")
-            
-            self.data = bytearray(self.data.lstrip('\x2F').rstrip('\x2F'))
-
-            if debug:
-                print "cut: ", util.tohex(self.data)
-
-            while len(self.data) > 0:
-                record = WMBusDataRecord()
-                self.data = record.parse(self.data)            
-                self.records.append(record)
-        else:
+        if (arr[0] < 11):
             print "(%d) " % arr[0] + util.tohex(arr) 
             raise Exception("Invalid frame length")
+
+        self.length = arr[0]
+        self.control = arr[1]
+        self.manufacturer = arr[2:4]
+        self.address = arr[4:10]
+        self.control_information = arr[10]
+        self.data = arr[11:]
+        
+        if (self.is_with_long_tl()):
+            self.header = WMBusLongDataHeader()
+            self.header.parse(self.data[0:12])
+            self.data = self.data[12:]
             
+            '''
+            Note that according to the standard, the manufacturer and 
+            device id from the transport header have precedence over the
+            frame information
+            '''
+            #self.manufacturer = header.manufacturer
+            #self.address[0,4] = header.identification
+            #self.address[4] = header.version
+            #self.address[5] = header.device_type
+            
+        elif (self.is_with_short_tl()):
+            self.header = WMBusShortDataHeader()
+            self.header.parse(self.data[0:4])
+            self.data = self.data[4:]
+            
+        self.data_size = len(self.data)
+        
+        if (keys):
+            devid = ''.join(chr(b) for b in self.get_device_id()) 
+            self.key = keys.get(devid, None)
+        
+        # time might come where we should move this into a function
+        if (self.header and self.header.get_encryption_mode() == 5):
+            
+            # data is encrypted. thus, check if a key was specified
+            if (self.key):
+                
+                # setup cipher specs, decrypt and strip padding
+                spec = AES.new(self.key, AES.MODE_CBC, "%s" % self.get_iv())
+                self.data = bytearray(spec.decrypt("%s" % self.data))
+               
+                if debug:
+                    print "dec: ", util.tohex(self.data)
+                
+                # check whether the first two bytes are 2F
+                if (self.data[0:2] != '\x2F\x2F'):
+                    print util.tohex(self.data)
+                    raise Exception("Decryption failed")
+        
+        self.data = bytearray(self.data.lstrip('\x2F').rstrip('\x2F'))
+
+        if debug:
+            print "cut: ", util.tohex(self.data)
+
+        while len(self.data) > 0:
+            record = WMBusDataRecord()
+            self.data = record.parse(self.data)            
+            self.records.append(record)
+
     def get_manufacturer_short(self):
         """ Returns the three letter manufacturer code
         
@@ -461,6 +478,27 @@ class WMBusFrame():
             return True
         
         return False
+
+    def strip_crc(self, arr):
+        """ Creates a copy of the frame without any CRC bytes.
+        """
+
+        if self.frameformat == 'a':
+            t = arr[0:-2]
+            return (t[0:10] + t[12:28] + t[30:46] + t[48:64] + t[66:82]
+                + t[84:100] + t[102:118] + t[120:136] + t[138:154] + t[156:172]
+                + t[174:190] + t[192:208] + t[210:226] + t[228:244] + t[246:272]
+                + t[274:290] + t[292:308])
+        elif self.frameformat == 'b':
+            if len(arr) > 127:
+                arr[0] = arr[0] - 4
+            else:
+                arr[0] = arr[0] - 2
+            t = arr[0:-2]
+            return t[0:126] + t[128:254]
+        else:
+            return arr
+
 
  
 class WMBusShortDataHeader():
