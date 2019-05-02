@@ -1266,16 +1266,25 @@ class WMBusDataRecord():
                     return util.frombcd(val)
 
             if chooser == 0xB:
-                return util.frombcd(val)
+                if len(self.value) != 3:
+                    return None
+                else:
+                    return util.frombcd(val)
 
             if chooser == 0xC:
-                return util.frombcd(val)
+                if len(self.value) != 4:
+                    return None
+                else:
+                    return util.frombcd(val)
 
             if chooser == 0xD:
                 return 'variable length'
 
             if chooser == 0xE:
-                return util.frombcd(val)
+                if len(self.value) != 6:
+                    return None
+                else:
+                    return util.frombcd(val)
 
             if chooser == 0xF:
                 return 'Special Functions'
