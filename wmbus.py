@@ -1207,7 +1207,7 @@ class WMBusDataRecord():
     def get_hex_value(self):
         """ Returns a big-endian hex-formatted value
         """
-        val = self.value
+        val = self.value[:]
         val.reverse()
 
         return util.tohex(val)
@@ -1216,8 +1216,8 @@ class WMBusDataRecord():
         """ Returns a pretty-formatted value according to DIF and VIF types
         """
         chooser = self.header.dif[0] & 0x0F
-        val = self.value
-        #val.reverse()
+        val = self.value[:]
+        val.reverse()
 
         try:
             if chooser == 0x0:
