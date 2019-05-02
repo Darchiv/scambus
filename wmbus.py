@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import sys, util
+import sys, util, struct
 
 from array import array
 from datetime import datetime
@@ -223,19 +223,26 @@ class WMBusFrame():
                 
                 if verb >= 2:
                     for rec in self.records:
-                         val = rec.value
-                         val.reverse()
+                        line += '\nDIFs:\t' + util.tohex(rec.header.dif) 
+                        line += " (" + rec.header.get_function_field_name() 
+                        line += ", " + rec.header.get_data_field_name() + ")"
                         
-                         line += '\nDIFs:\t' + util.tohex(rec.header.dif) 
-                         line += " (" + rec.header.get_function_field_name() 
-                         line += ", " + rec.header.get_data_field_name() + ")"
-                         
-                         line += '\nVIFs:\t' + util.tohex(rec.header.vif) 
-                         line += " (" + rec.header.get_vif_description() + ")"
-                         
-                         line += '\nValue:\t' + util.tohex(val)
-                         line += '\n--'
-                         
+                        line += '\nVIFs:\t' + util.tohex(rec.header.vif) 
+                        line += " (" + rec.header.get_vif_description() + ")"
+                        
+                        line += '\nValue:\t' + rec.get_hex_value()
+
+                        val = rec.get_pretty_value()
+
+                        if val == None:
+                            line += '\n\nWarning: value length/type is invalid. Further decoding might be unreliable.'
+                        else:
+                            line += " (" + str(val) + ")"
+
+                        line += '\n--'
+                        
+
+
         else:
             line += 'Data: ' + util.tohex(self.data)
         '''
@@ -1196,3 +1203,85 @@ class WMBusDataRecord():
         len_total = len_dif + len_vif + var + len(self.value)
         
         return arr[len_total:]
+
+    def get_hex_value(self):
+        """ Returns a big-endian hex-formatted value
+        """
+        val = self.value
+        val.reverse()
+
+        return util.tohex(val)
+
+    def get_pretty_value(self):
+        """ Returns a pretty-formatted value according to DIF and VIF types
+        """
+        chooser = self.header.dif[0] & 0x0F
+        val = self.value
+        #val.reverse()
+
+        try:
+            if chooser == 0x0:
+                return 'No data'
+
+            if chooser == 0x1:
+                return struct.unpack('<b', self.value)[0]
+
+            if chooser == 0x2:
+                return struct.unpack('<h', self.value)[0]
+
+            if chooser == 0x3:
+                if len(self.value) != 3:
+                    return None
+                else:
+                    return struct.unpack('<i', self.value.ljust(4, '\0'))[0]
+
+            if chooser == 0x4:
+                return struct.unpack('<i', self.value)[0]
+
+            if chooser == 0x5:
+                return struct.unpack('<f', self.value)[0]
+
+            if chooser == 0x6:
+                if len(self.value) != 6:
+                    return None
+                else:
+                    return struct.unpack('<q', self.value.ljust(8, '\0'))[0]
+
+            if chooser == 0x7:
+                return struct.unpack('<q', self.value)[0]
+
+            if chooser == 0x8:
+                return 'Selection for Readout'
+
+            if chooser == 0x9:
+                if len(self.value) != 1:
+                    return None
+                else:
+                    return util.frombcd(val)
+
+            if chooser == 0xA:
+                if len(self.value) != 2:
+                    return None
+                else:
+                    return util.frombcd(val)
+
+            if chooser == 0xB:
+                return util.frombcd(val)
+
+            if chooser == 0xC:
+                return util.frombcd(val)
+
+            if chooser == 0xD:
+                return 'variable length'
+
+            if chooser == 0xE:
+                return util.frombcd(val)
+
+            if chooser == 0xF:
+                return 'Special Functions'
+
+        except struct.error:
+            return None
+
+        except TypeError:
+            return 'invalid coding of BCD'

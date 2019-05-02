@@ -6,44 +6,44 @@ debug = 0
 
 
 def connect_sniffer(port):
-	""" Connect to sniffer device on specified port.
-	
-	Provides means to connect to the serial tty which is commonly created by 
-	FTDI based wireless M-Bus sniffer devices that deliver sniffed wM-Bus
-	frames as continuous stream at the tty
-	"""
-	ser = serial.Serial(
-		port=port,
-		baudrate=9600,
-		parity=serial.PARITY_NONE,
-		stopbits=serial.STOPBITS_ONE,
-		bytesize=serial.EIGHTBITS,
-		#rtscts=False,
-		timeout=30
-	)
-	
-	ser.open()
-	ser.isOpen()
-	
-	return ser
+    """ Connect to sniffer device on specified port.
+    
+    Provides means to connect to the serial tty which is commonly created by 
+    FTDI based wireless M-Bus sniffer devices that deliver sniffed wM-Bus
+    frames as continuous stream at the tty
+    """
+    ser = serial.Serial(
+        port=port,
+        baudrate=9600,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+        bytesize=serial.EIGHTBITS,
+        #rtscts=False,
+        timeout=30
+    )
+    
+    ser.open()
+    ser.isOpen()
+    
+    return ser
 
 def loadsample(path):
-	""" Load sample frame from file specified by path.
-	
-	The method supports to load captured wireless M-Bus frames from files for 
-	any debugging or replay purposes
-	"""
-	
-	f = open(path,'rb')
-	a = array('B', f.read())
-	
-	if debug:
-		print '-- file contents --'
-		print a
-		print '-- eof --'
-		
-	return a   
-	
+    """ Load sample frame from file specified by path.
+    
+    The method supports to load captured wireless M-Bus frames from files for 
+    any debugging or replay purposes
+    """
+    
+    f = open(path,'rb')
+    a = array('B', f.read())
+    
+    if debug:
+        print '-- file contents --'
+        print a
+        print '-- eof --'
+        
+    return a   
+    
 def tohex(v, split=' '):
     """ Return value in hex form as a string (for pretty printing purposes).
     
@@ -61,3 +61,32 @@ def tohex(v, split=' '):
         return myformat % v
     else:
         return "tohex(): unsupported type"
+
+def frombcd(v):
+    """ Return a string representation of a given BCD-encoded value.
+    
+    When any digit value is invalid (over 0x9), TypeError is thrown.
+    """
+
+    if len(v) == 0:
+        return ''
+
+    isnegative = False
+
+    if (v[0] >> 4) == 0xF:
+        isnegative = True
+    elif (v[0] >> 4) > 0x9:
+        raise TypeError
+
+    if (v[0] & 0xF) > 0x9:
+        raise TypeError
+
+    for char in v[1:]:
+        for val in (char >> 4, char & 0xF):
+            if val > 0x9:
+                raise TypeError
+
+    if isnegative:
+        return '-' + tohex(v, '')[1:]
+    else:
+        return '+' + tohex(v, '')
